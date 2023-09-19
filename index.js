@@ -32,10 +32,17 @@ async function run() {
 
     // Get a reference to the "todos" collection in the "api" database
     const TodoCollection = client.db("api").collection("todos");
+    const TodoReportsCollection = client.db("api").collection("todosReports");
 
     // Get all todos
     app.get("/api/todos", async (req, res) => {
       const cursor = TodoCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    // Get all todos reports
+    app.get("/api/todosReports", async (req, res) => {
+      const cursor = TodoReportsCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -46,12 +53,25 @@ async function run() {
       const result = await TodoCollection.insertOne(addedTodo);
       res.send(result);
     });
+    // Add a new todo report
+    app.post("/api/todosReports", async (req, res) => {
+      const addedTodo = req.body;
+      const result = await TodoReportsCollection.insertOne(addedTodo);
+      res.send(result);
+    });
 
     // Get a specific todo by ID
     app.get("/api/todos/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await TodoCollection.findOne(query);
+      res.send(result);
+    });
+    // Get a specific todo report by ID
+    app.get("/api/todosReports/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await TodoReportsCollection.findOne(query);
       res.send(result);
     });
 
