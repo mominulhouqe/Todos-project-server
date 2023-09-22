@@ -33,13 +33,23 @@ async function run() {
     // Get a reference to the "todos" collection in the "api" database
     const TodoCollection = client.db("api").collection("todos");
     const TodoReportsCollection = client.db("api").collection("todosReports");
+    // Create MongoDB collections for likes, comments, and shares
+    const LikesCollection = client.db("api").collection("likes");
+    const CommentsCollection = client.db("api").collection("comments");
 
-    // Get all todos
+
+    // Get all todos, sorted by creation time in descending order
     app.get("/api/todos", async (req, res) => {
-      const cursor = TodoCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
+      try {
+        const cursor = TodoCollection.find().sort({ timestamp: -1 });
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching todos:", error);
+        res.status(500).json({ error: "An error occurred while fetching todos." });
+      }
     });
+
     // Get all todos reports
     app.get("/api/todosReports", async (req, res) => {
       const cursor = TodoReportsCollection.find();
@@ -101,6 +111,109 @@ async function run() {
       const result = await TodoCollection.deleteOne(query);
       res.send(result);
     });
+
+    // Add a new like to a todo item
+    app.post("/api/todos/:id/likes", async (req, res) => {
+      const todoId = req.params.id;
+      const { userId, userName } = req.body; // Assuming you pass user ID and user name from the frontend
+      try {
+        const result = await LikesCollection.insertOne({
+          todoId,
+          userId,
+          userName,
+        });
+        res.json(result);
+      } catch (error) {
+        console.error("Error adding like:", error);
+        res.status(500).json({ error: "An error occurred while adding a like." });
+      }
+    });
+
+
+    // Get the count of likes for a todo item
+    app.get("/api/todos/:id/likes", async (req, res) => {
+      const todoId = req.params.id;
+      try {
+        const likeCount = await LikesCollection.countDocuments({ todoId });
+        res.json({ likeCount });
+      } catch (error) {
+        console.error("Error fetching like count:", error);
+        res.status(500).json({ error: "An error occurred while fetching like count." });
+      }
+    });
+
+    // Get the count of comments for a todo item
+    // app.get("/api/todos/:id/comments", async (req, res) => {
+    //   const todoId = req.params.id;
+    //   try {
+    //     const commentCount = await CommentsCollection.countDocuments({ todoId });
+    //     res.json({ commentCount });
+    //   } catch (error) {
+    //     console.error("Error fetching comment count:", error);
+    //     res.status(500).json({ error: "An error occurred while fetching comment count." });
+    //   }
+    // });
+
+    // Get comments for a specific todo item by todo ID
+    app.get("/api/todos/:id/comments", async (req, res) => {
+      const todoId = req.params.id;
+      try {
+        const query = { todoId };
+        const comments = await CommentsCollection.find(query).toArray();
+        res.json(comments);
+      } catch (error) {
+        console.error("Error fetching comments:", error);
+        res.status(500).json({ error: "An error occurred while fetching comments." });
+      }
+    });
+
+    // Get a specific comment by its ID
+    app.get("/api/comments/:commentId", async (req, res) => {
+      const commentId = req.params.commentId;
+      try {
+        const query = { _id: new ObjectId(commentId) };
+        const comment = await CommentsCollection.findOne(query);
+        res.json(comment);
+      } catch (error) {
+        console.error("Error fetching comment:", error);
+        res.status(500).json({ error: "An error occurred while fetching the comment." });
+      }
+    });
+
+    // Add a new comment to a todo item
+    app.post("/api/todos/:id/comments", async (req, res) => {
+      const todoId = req.params.id;
+      const { userId, userName, text, photoURL, email, timestamp } = req.body; // Assuming you pass user ID, user name, and comment text from the frontend
+      try {
+        const result = await CommentsCollection.insertOne({
+          todoId,
+          userId,
+          userName,
+          text,
+          photoURL,
+          email,
+          timestamp
+        });
+        res.json(result);
+      } catch (error) {
+        console.error("Error adding comment:", error);
+        res.status(500).json({ error: "An error occurred while adding a comment." });
+      }
+    });
+
+    // Delete a specific comment by its ID
+    app.delete("/api/comments/:commentId", async (req, res) => {
+      const commentId = req.params.commentId;
+      try {
+        const query = { _id: new ObjectId(commentId) };
+        const result = await CommentsCollection.deleteOne(query);
+        res.json(result);
+      } catch (error) {
+        console.error("Error deleting comment:", error);
+        res.status(500).json({ error: "An error occurred while deleting the comment." });
+      }
+    });
+
 
     // Ping MongoDB to check the connection
     await client.db("admin").command({ ping: 1 });
