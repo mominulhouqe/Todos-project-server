@@ -38,7 +38,6 @@ async function run() {
     const CommentsCollection = client.db("api").collection("comments");
 
 
-    // Get all todos, sorted by creation time in descending order
     app.get("/api/todos", async (req, res) => {
       try {
         const cursor = TodoCollection.find().sort({ timestamp: -1 });
@@ -49,6 +48,7 @@ async function run() {
         res.status(500).json({ error: "An error occurred while fetching todos." });
       }
     });
+    
 
     // Get all todos reports
     app.get("/api/todosReports", async (req, res) => {
