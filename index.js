@@ -36,6 +36,7 @@ async function run() {
     // Create MongoDB collections for likes, comments, and shares
     const LikesCollection = client.db("api").collection("likes");
     const CommentsCollection = client.db("api").collection("comments");
+    const formCollection = client.db("api").collection("forms");
 
 
     app.get("/api/todos", async (req, res) => {
@@ -48,7 +49,7 @@ async function run() {
         res.status(500).json({ error: "An error occurred while fetching todos." });
       }
     });
-    
+
 
     // Get all todos reports
     app.get("/api/todosReports", async (req, res) => {
@@ -213,6 +214,26 @@ async function run() {
         res.status(500).json({ error: "An error occurred while deleting the comment." });
       }
     });
+
+
+    // Get all forms
+    app.get("/api/forms", async (req, res) => {
+      const cursor = formCollection.find();
+      const result = await cursor.toArray();
+      console.log("geting",result);
+      res.send(result);
+    });
+
+    // API endpoint to handle form submissions
+    app.post('/api/forms', async (req, res) => {
+
+      const forms = req.body;
+      const result = await formCollection.insertOne(forms);
+      console.log("post",result);
+      res.send(result);
+
+    });
+
 
 
     // Ping MongoDB to check the connection
