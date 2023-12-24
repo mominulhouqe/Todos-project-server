@@ -3,7 +3,7 @@ const app = express();
 const port = 5000;
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
+const multer = require("multer");
 app.use(cors());
 app.use(express.json()); // Add this line to parse JSON request bodies
 
@@ -37,7 +37,7 @@ async function run() {
     const LikesCollection = client.db("api").collection("likes");
     const CommentsCollection = client.db("api").collection("comments");
     const formCollection = client.db("api").collection("forms");
-
+    const cvCollection = client.db("api").collection("cvUpload");
 
     app.get("/api/todos", async (req, res) => {
       try {
@@ -46,10 +46,11 @@ async function run() {
         res.send(result);
       } catch (error) {
         console.error("Error fetching todos:", error);
-        res.status(500).json({ error: "An error occurred while fetching todos." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching todos." });
       }
     });
-
 
     // Get all todos reports
     app.get("/api/todosReports", async (req, res) => {
@@ -114,22 +115,55 @@ async function run() {
     });
 
     // Add a new like to a todo item
+
     app.post("/api/todos/:id/likes", async (req, res) => {
       const todoId = req.params.id;
-      const { userId, userName } = req.body; // Assuming you pass user ID and user name from the frontend
+      const userId = req.body.userId; // Assuming userId is sent in the request body
+
       try {
-        const result = await LikesCollection.insertOne({
-          todoId,
-          userId,
-          userName,
-        });
-        res.json(result);
+        // Check if the user has already liked the post
+        const existingLike = await LikesCollection.findOne({ userId, todoId });
+
+        if (existingLike) {
+          return res
+            .status(400)
+            .json({ error: "User has already liked this post" });
+        }
+
+        // If not, create a new like
+        await LikesCollection.create({ userId, todoId });
+
+        // Update the count in the TodoCollection or send the count from the LikesCollection
+        const likeCount = await LikesCollection.countDocuments({ todoId });
+        res.json({ likeCount });
       } catch (error) {
-        console.error("Error adding like:", error);
-        res.status(500).json({ error: "An error occurred while adding a like." });
+        console.error("Error liking post:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while liking the post." });
       }
     });
 
+    app.get("/api/todos/:id/likes", async (req, res) => {
+      const todoId = req.params.id;
+      try {
+        const todo = await TodoCollection.findOne({
+          _id: new ObjectId(todoId),
+        });
+
+        if (!todo) {
+          return res.status(404).json({ error: "Todo not found" });
+        }
+
+        const likeCount = todo.likes.length;
+        res.json({ likeCount });
+      } catch (error) {
+        console.error("Error fetching like count:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching like count." });
+      }
+    });
 
     // Get the count of likes for a todo item
     app.get("/api/todos/:id/likes", async (req, res) => {
@@ -139,7 +173,32 @@ async function run() {
         res.json({ likeCount });
       } catch (error) {
         console.error("Error fetching like count:", error);
-        res.status(500).json({ error: "An error occurred while fetching like count." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching like count." });
+      }
+    });
+
+    app.delete("/api/todos/:id/likes/:userId", async (req, res) => {
+      const todoId = req.params.id;
+      const userId = req.params.userId;
+
+      try {
+        // Find and delete the like
+        const result = await LikesCollection.deleteOne({ userId, todoId });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ error: "Like not found" });
+        }
+
+        // Update the count in the TodoCollection or send the count from the LikesCollection
+        const likeCount = await LikesCollection.countDocuments({ todoId });
+        res.json({ likeCount });
+      } catch (error) {
+        console.error("Error unliking post:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while unliking the post." });
       }
     });
 
@@ -164,7 +223,9 @@ async function run() {
         res.json(comments);
       } catch (error) {
         console.error("Error fetching comments:", error);
-        res.status(500).json({ error: "An error occurred while fetching comments." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching comments." });
       }
     });
 
@@ -177,7 +238,9 @@ async function run() {
         res.json(comment);
       } catch (error) {
         console.error("Error fetching comment:", error);
-        res.status(500).json({ error: "An error occurred while fetching the comment." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching the comment." });
       }
     });
 
@@ -193,12 +256,14 @@ async function run() {
           text,
           photoURL,
           email,
-          timestamp
+          timestamp,
         });
         res.json(result);
       } catch (error) {
         console.error("Error adding comment:", error);
-        res.status(500).json({ error: "An error occurred while adding a comment." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while adding a comment." });
       }
     });
 
@@ -211,34 +276,70 @@ async function run() {
         res.json(result);
       } catch (error) {
         console.error("Error deleting comment:", error);
-        res.status(500).json({ error: "An error occurred while deleting the comment." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while deleting the comment." });
       }
     });
 
+    const storage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, "uploads/"); // Specify the folder where uploaded files will be stored
+      },
+      filename: (req, file, cb) => {
+        cb(null, Date.now() + "-" + file.originalname); // Use a unique filename
+      },
+    });
+
+    const upload = multer({ storage: storage });
+    app.post("/api/cvUpload", upload.single("cv"), async (req, res) => {
+      try {
+        // Handle CV file upload
+        const cvPath = req.file.path;
+
+        // Assuming you have a 'cv' field in your 'forms' collection
+        const result = await cvCollection.updateOne(
+          { _id: new ObjectId(req.body.formId) }, // Assuming you pass the formId from the frontend
+          { $set: { cv: cvPath } }
+        );
+
+        if (result.modifiedCount === 1) {
+          res.json({
+            success: true,
+            message: "CV uploaded and database updated successfully",
+          });
+        } else {
+          res.status(500).json({ error: "Failed to update the database" });
+        }
+      } catch (error) {
+        console.error("Error handling CV file upload:", error);
+        res.status(500).json({
+          error: "An error occurred while handling the CV file upload",
+        });
+      }
+    });
 
     // Get all forms
     app.get("/api/forms", async (req, res) => {
       const cursor = formCollection.find();
       const result = await cursor.toArray();
-      console.log("geting",result);
+      console.log("geting", result);
       res.send(result);
     });
 
     // API endpoint to handle form submissions
-    app.post('/api/forms', async (req, res) => {
-
+    app.post("/api/forms", async (req, res) => {
       const forms = req.body;
       const result = await formCollection.insertOne(forms);
-      console.log("post",result);
+      console.log("post", result);
       res.send(result);
-
     });
-
-
 
     // Ping MongoDB to check the connection
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } finally {
     // Ensure to close the client when done (uncomment when needed)
     // await client.close();
