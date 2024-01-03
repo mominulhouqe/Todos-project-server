@@ -37,7 +37,61 @@ async function run() {
     const LikesCollection = client.db("api").collection("likes");
     const CommentsCollection = client.db("api").collection("comments");
     const formCollection = client.db("api").collection("forms");
-    const cvCollection = client.db("api").collection("cvUpload");
+    const usersCollections = client.db("api").collection("users");
+
+    // Regular user route
+    app.get("/users", async (req, res) => {
+      try {
+        const result = await usersCollections.find().toArray();
+        res.status(200).send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
+    app.post("/users", async (req, res) => {
+      try {
+        const user = req.body;
+        console.log(user);
+
+        const query = { email: user.email };
+        const existingUser = await usersCollections.findOne(query);
+
+        if (existingUser) {
+          return res.status(400).send({ message: "User already exists" });
+        }
+
+        user.role = "user"; // Default role is user
+
+        const result = await usersCollections.insertOne(user);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
+    // Check if a user has admin role route
+    app.get("/users/:email", async (req, res) => {
+      try {
+        const userEmail = req.params.email;
+
+        const user = await usersCollections.findOne({ email: userEmail });
+
+        if (!user) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        const userRole = user.role || "user";
+        const isAdmin = userRole === "admin";
+
+        res.status(200).send({ email: userEmail, isAdmin });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
 
     app.get("/api/todos", async (req, res) => {
       try {
@@ -202,18 +256,6 @@ async function run() {
       }
     });
 
-    // Get the count of comments for a todo item
-    // app.get("/api/todos/:id/comments", async (req, res) => {
-    //   const todoId = req.params.id;
-    //   try {
-    //     const commentCount = await CommentsCollection.countDocuments({ todoId });
-    //     res.json({ commentCount });
-    //   } catch (error) {
-    //     console.error("Error fetching comment count:", error);
-    //     res.status(500).json({ error: "An error occurred while fetching comment count." });
-    //   }
-    // });
-
     // Get comments for a specific todo item by todo ID
     app.get("/api/todos/:id/comments", async (req, res) => {
       const todoId = req.params.id;
@@ -279,43 +321,6 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while deleting the comment." });
-      }
-    });
-
-    const storage = multer.diskStorage({
-      destination: (req, file, cb) => {
-        cb(null, "uploads/"); // Specify the folder where uploaded files will be stored
-      },
-      filename: (req, file, cb) => {
-        cb(null, Date.now() + "-" + file.originalname); // Use a unique filename
-      },
-    });
-
-    const upload = multer({ storage: storage });
-    app.post("/api/cvUpload", upload.single("cv"), async (req, res) => {
-      try {
-        // Handle CV file upload
-        const cvPath = req.file.path;
-
-        // Assuming you have a 'cv' field in your 'forms' collection
-        const result = await cvCollection.updateOne(
-          { _id: new ObjectId(req.body.formId) }, // Assuming you pass the formId from the frontend
-          { $set: { cv: cvPath } }
-        );
-
-        if (result.modifiedCount === 1) {
-          res.json({
-            success: true,
-            message: "CV uploaded and database updated successfully",
-          });
-        } else {
-          res.status(500).json({ error: "Failed to update the database" });
-        }
-      } catch (error) {
-        console.error("Error handling CV file upload:", error);
-        res.status(500).json({
-          error: "An error occurred while handling the CV file upload",
-        });
       }
     });
 
