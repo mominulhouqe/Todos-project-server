@@ -113,9 +113,29 @@ async function run() {
       res.send(result);
     });
 
+    // Update the status of a specific todo by ID
+    app.put("/api/todos/:id/status", async (req, res) => {
+      const todoId = req.params.id;
+      const newStatus = req.body.status; // The new status, either 'approved' or 'rejected'
+
+      try {
+        const result = await TodoCollection.updateOne(
+          { _id: new ObjectId(todoId) },
+          { $set: { status: newStatus } }
+        );
+
+        res.json(result);
+      } catch (error) {
+        console.error("Error updating todo status:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while updating todo status." });
+      }
+    });
+
     // Add a new todo
     app.post("/api/todos", async (req, res) => {
-      const addedTodo = req.body;
+      const addedTodo = { ...req.body, status: "pending" }; // Set the default status to 'pending'
       const result = await TodoCollection.insertOne(addedTodo);
       res.send(result);
     });
