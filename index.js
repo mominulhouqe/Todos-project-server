@@ -218,27 +218,6 @@ async function run() {
       }
     });
 
-    app.get("/api/todos/:id/likes", async (req, res) => {
-      const todoId = req.params.id;
-      try {
-        const todo = await TodoCollection.findOne({
-          _id: new ObjectId(todoId),
-        });
-
-        if (!todo) {
-          return res.status(404).json({ error: "Todo not found" });
-        }
-
-        const likeCount = todo.likes.length;
-        res.json({ likeCount });
-      } catch (error) {
-        console.error("Error fetching like count:", error);
-        res
-          .status(500)
-          .json({ error: "An error occurred while fetching like count." });
-      }
-    });
-
     // Get the count of likes for a todo item
     app.get("/api/todos/:id/likes", async (req, res) => {
       const todoId = req.params.id;
